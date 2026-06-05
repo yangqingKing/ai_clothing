@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 人物换装 - 智能服装转换工具</title>
+    <link rel="stylesheet" href="styles/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧥 AI 人物换装系统</h1>
+            <p>上传两张人物图片，AI 将自动为您转移衣服</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <div class="upload-box">
+                    <h3>第一张图片 (衣服来源)</h3>
+                    <div class="image-container">
+                        <img id="sourceImage" alt="衣服源图片">
+                        <div class="placeholder" id="sourcePlaceholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <polyline points="23 19 23 5 1 5 1 19 23 19"></polyline>
+                                <polyline points="1 10 23 10"></polyline>
+                            </svg>
+                            <p>点击上传或拖拽图片</p>
+                        </div>
+                    </div>
+                    <input type="file" id="sourceInput" accept="image/*" hidden>
+                    <button class="btn btn-upload" onclick="document.getElementById('sourceInput').click()">选择图片</button>
+                </div>
+
+                <div class="upload-box">
+                    <h3>第二张图片 (人物目标)</h3>
+                    <div class="image-container">
+                        <img id="targetImage" alt="人物目标图片">
+                        <div class="placeholder" id="targetPlaceholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <polyline points="23 19 23 5 1 5 1 19 23 19"></polyline>
+                                <polyline points="1 10 23 10"></polyline>
+                            </svg>
+                            <p>点击上传或拖拽图片</p>
+                        </div>
+                    </div>
+                    <input type="file" id="targetInput" accept="image/*" hidden>
+                    <button class="btn btn-upload" onclick="document.getElementById('targetInput').click()">选择图片</button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <button class="btn btn-primary" id="processBtn" disabled>
+                    🚀 开始换装
+                </button>
+                <button class="btn btn-secondary" id="resetBtn">
+                    🔄 重置
+                </button>
+            </div>
+
+            <div id="loadingIndicator" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>AI 正在处理中... <span id="processingStep">加载模型</span></p>
+            </div>
+
+            <div class="result-section" id="resultSection" style="display: none;">
+                <h2>处理结果</h2>
+                <div class="canvas-container">
+                    <canvas id="resultCanvas"></canvas>
+                </div>
+                <button class="btn btn-success" id="downloadBtn">💾 下载结果</button>
+            </div>
+
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+        </main>
+
+        <footer>
+            <p>💡 提示：为获得最佳效果，请上传清晰的人物正面照片，图片尺寸建议 512x512 以上</p>
+        </footer>
+    </div>
+
+    <!-- 隐藏的 Canvas 用于处理 -->
+    <canvas id="processingCanvas" style="display: none;"></canvas>
+    <canvas id="segmentationCanvas" style="display: none;"></canvas>
+
+    <!-- 加载必要的库 -->
+    <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1675469636/camera_utils.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.4.1675469636/drawing_utils.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.4.1675469636/selfie_segmentation.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/opencv.js@4.5.5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js-core@4.4.0/tesseract-core.min.js"></script>
+
+    <!-- 项目脚本 -->
+    <script src="src/imageProcessor.js"></script>
+    <script src="src/detection.js"></script>
+    <script src="src/segmentation.js"></script>
+    <script src="src/synthesis.js"></script>
+    <script src="src/ui.js"></script>
+</body>
+</html>
