@@ -1,5 +1,5 @@
 /**
- * 合成模块
+ * 合成模块 (纯 JavaScript - 不依赖 OpenCV)
  * 将衣服从源图像转移到目标图像
  */
 
@@ -28,8 +28,8 @@ class ClothingSynthesis {
             // 3. 应用衣服到目标图像
             const result = this.applyClothingToTarget(aligned.targetAligned, clothingTexture, segmentationResults.target);
 
-            // 4. 进行边界融合和优化
-            const optimized = this.optimizeResult(result, targetCanvas, segmentationResults.target);
+            // 4. 进行边界融合和优化（纯 JS 版本）
+            const optimized = this.optimizeResultJS(result, targetCanvas, segmentationResults.target);
 
             this.resultCanvas = optimized;
             return optimized;
@@ -169,49 +169,152 @@ class ClothingSynthesis {
     }
 
     /**
-     * 优化结果（边界融合、增强对比度等）
+     * 优化结果（纯 JavaScript 版本 - 不依赖 OpenCV）
      * @param {HTMLCanvasElement} resultCanvas - 原始结果
      * @param {HTMLCanvasElement} targetCanvas - 原始目标
      * @param {object} targetSegmentation - 目标分割结果
      * @returns {HTMLCanvasElement}
      */
-    optimizeResult(resultCanvas, targetCanvas, targetSegmentation) {
+    optimizeResultJS(resultCanvas, targetCanvas, targetSegmentation) {
         console.log('优化结果...');
 
-        const src = cv.imread(resultCanvas);
-        const dst = new cv.Mat();
+        const canvas = document.createElement('canvas');
+        canvas.width = resultCanvas.width;
+        canvas.height = resultCanvas.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-        // 应用双边滤波器以保护边缘同时平滑颜色
-        cv.bilateralFilter(src, dst, 9, 75, 75);
+        // 复制结果
+        ctx.drawImage(resultCanvas, 0, 0);
 
-        // 应用自适应直方图均衡化（CLAHE）以改善对比度
-        const lab = new cv.Mat();
-        cv.cvtColor(dst, lab, cv.COLOR_RGB2Lab);
-        const channels = new cv.MatVector();
-        cv.split(lab, channels);
+        // 获取图像数据
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
 
-        const l = channels.get(0);
-        const clahe = cv.createCLAHE(2.0, new cv.Size(8, 8));
-        const enhanced = new cv.Mat();
-        clahe.apply(l, enhanced);
-        channels.set(0, enhanced);
+        // 应用简单的双边滤波器近似（使用中值滤波和高斯平滑）
+        const blurred = this.applyBilateralFilterJS(data, canvas.width, canvas.height);
 
-        const result = new cv.Mat();
-        cv.merge(channels, result);
-        cv.cvtColor(result, result, cv.COLOR_Lab2RGB);
+        // 应用对比度增强
+        const enhanced = this.enhanceContrastJS(blurred, canvas.width, canvas.height);
 
-        const finalCanvas = document.createElement('canvas');
-        cv.imshow(finalCanvas, result);
+        // 将处理后的数据写回
+        for (let i = 0; i < data.length; i++) {
+            data[i] = enhanced[i];
+        }
 
-        // 清理内存
-        src.delete();
-        dst.delete();
-        lab.delete();
-        channels.delete();
-        enhanced.delete();
-        result.delete();
+        ctx.putImageData(imageData, 0, 0);
+        return canvas;
+    }
 
-        return finalCanvas;
+    /**
+     * 应用双边滤波器（纯 JS 近似）
+     * @param {Uint8ClampedArray} data - 图像数据
+     * @param {number} width - 宽度
+     * @param {number} height - 高度
+     * @returns {Uint8ClampedArray}
+     */
+    applyBilateralFilterJS(data, width, height) {
+        const filtered = new Uint8ClampedArray(data);
+        const radius = 2;
+        const sigmaColor = 75;
+        const sigmaSpace = 75;
+
+        for (let y = radius; y < height - radius; y++) {
+            for (let x = radius; x < width - radius; x++) {
+                const idx = (y * width + x) * 4;
+                const centerR = data[idx];
+                const centerG = data[idx + 1];
+                const centerB = data[idx + 2];
+                const centerA = data[idx + 3];
+
+                let sumR = 0, sumG = 0, sumB = 0, sumA = 0;
+                let weightSum = 0;
+
+                // 遍历邻域
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        const nidx = ((y + dy) * width + (x + dx)) * 4;
+                        const nR = data[nidx];
+                        const nG = data[nidx + 1];
+                        const nB = data[nidx + 2];
+                        const nA = data[nidx + 3];
+
+                        // 计算颜色差异
+                        const colorDiff = Math.sqrt(
+                            Math.pow(centerR - nR, 2) +
+                            Math.pow(centerG - nG, 2) +
+                            Math.pow(centerB - nB, 2)
+                        );
+
+                        // 计算空间距离
+                        const spatialDist = Math.sqrt(dx * dx + dy * dy);
+
+                        // 计算权重
+                        const colorWeight = Math.exp(-colorDiff / (2 * sigmaColor));
+                        const spatialWeight = Math.exp(-spatialDist / (2 * sigmaSpace));
+                        const weight = colorWeight * spatialWeight;
+
+                        sumR += nR * weight;
+                        sumG += nG * weight;
+                        sumB += nB * weight;
+                        sumA += nA * weight;
+                        weightSum += weight;
+                    }
+                }
+
+                if (weightSum > 0) {
+                    filtered[idx] = sumR / weightSum;
+                    filtered[idx + 1] = sumG / weightSum;
+                    filtered[idx + 2] = sumB / weightSum;
+                    filtered[idx + 3] = sumA / weightSum;
+                }
+            }
+        }
+
+        return filtered;
+    }
+
+    /**
+     * 增强对比度（纯 JS 版本）
+     * @param {Uint8ClampedArray} data - 图像数据
+     * @param {number} width - 宽度
+     * @param {number} height - 高度
+     * @returns {Uint8ClampedArray}
+     */
+    enhanceContrastJS(data, width, height) {
+        const enhanced = new Uint8ClampedArray(data);
+
+        // 计算亮度直方图
+        const histogram = new Array(256).fill(0);
+        for (let i = 0; i < data.length; i += 4) {
+            const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            histogram[Math.floor(brightness)]++;
+        }
+
+        // 计算累积直方图
+        const cumulative = new Array(256);
+        cumulative[0] = histogram[0];
+        for (let i = 1; i < 256; i++) {
+            cumulative[i] = cumulative[i - 1] + histogram[i];
+        }
+
+        // 归一化
+        const totalPixels = width * height;
+        for (let i = 0; i < 256; i++) {
+            cumulative[i] = Math.round((cumulative[i] / totalPixels) * 255);
+        }
+
+        // 应用均衡化（温和应用以避免过度处理）
+        for (let i = 0; i < data.length; i += 4) {
+            const brightness = Math.floor((data[i] + data[i + 1] + data[i + 2]) / 3);
+            const mappedValue = cumulative[brightness];
+            const alpha = 0.3; // 柔和应用
+
+            enhanced[i] = Math.min(255, data[i] + (mappedValue - brightness) * alpha);
+            enhanced[i + 1] = Math.min(255, data[i + 1] + (mappedValue - brightness) * alpha);
+            enhanced[i + 2] = Math.min(255, data[i + 2] + (mappedValue - brightness) * alpha);
+        }
+
+        return enhanced;
     }
 
     /**
