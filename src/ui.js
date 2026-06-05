@@ -18,8 +18,15 @@ class UIController {
         // 文件输入处理
         const sourceInput = document.getElementById('sourceInput');
         const targetInput = document.getElementById('targetInput');
-        const sourceContainer = document.querySelector('[onclick*="sourceInput"]').parentElement.previousElementSibling;
-        const targetContainer = document.querySelector('[onclick*="targetInput"]').parentElement.previousElementSibling;
+        
+        // 修复：直接选择图像容器
+        const sourceContainer = document.querySelectorAll('.image-container')[0];
+        const targetContainer = document.querySelectorAll('.image-container')[1];
+
+        if (!sourceInput || !targetInput || !sourceContainer || !targetContainer) {
+            console.error('DOM 元素加载失败，请检查 HTML 结构');\
+            return;
+        }
 
         sourceInput.addEventListener('change', (e) => this.handleSourceFileSelect(e));
         targetInput.addEventListener('change', (e) => this.handleTargetFileSelect(e));
@@ -29,12 +36,21 @@ class UIController {
         this.setupDragAndDrop('targetInput', targetContainer);
 
         // 按钮处理
-        document.getElementById('processBtn').addEventListener('click', () => this.processImages());
-        document.getElementById('resetBtn').addEventListener('click', () => this.reset());
-        document.getElementById('downloadBtn').addEventListener('click', () => this.downloadResult());
+        const processBtn = document.getElementById('processBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        if (processBtn) processBtn.addEventListener('click', () => this.processImages());
+        if (resetBtn) resetBtn.addEventListener('click', () => this.reset());
+        if (downloadBtn) downloadBtn.addEventListener('click', () => this.downloadResult());
     }
 
     setupDragAndDrop(inputId, container) {
+        if (!container) {
+            console.error(`容器不存在: ${inputId}`);
+            return;
+        }
+
         container.addEventListener('dragover', (e) => {
             e.preventDefault();
             container.classList.add('dragover');
@@ -49,11 +65,20 @@ class UIController {
             container.classList.remove('dragover');
             const files = e.dataTransfer.files;
             if (files.length > 0) {
-                document.getElementById(inputId).files = files;
-                if (inputId === 'sourceInput') {
-                    this.handleSourceFileSelect({ target: { files } });
-                } else {
-                    this.handleTargetFileSelect({ target: { files } });
+                const input = document.getElementById(inputId);
+                if (input) {
+                    // 创建 DataTransfer 对象来设置文件
+                    const dataTransfer = new DataTransfer();
+                    for (let i = 0; i < files.length; i++) {
+                        dataTransfer.items.add(files[i]);
+                    }
+                    input.files = dataTransfer.files;
+
+                    if (inputId === 'sourceInput') {
+                        this.handleSourceFileSelect({ target: { files: dataTransfer.files } });
+                    } else {
+                        this.handleTargetFileSelect({ target: { files: dataTransfer.files } });
+                    }
                 }
             }
         });
@@ -71,9 +96,12 @@ class UIController {
 
             // 显示预览
             const sourceImg = document.getElementById('sourceImage');
-            sourceImg.src = img.src;
-            sourceImg.style.display = 'block';
-            document.getElementById('sourcePlaceholder').style.display = 'none';
+            const sourcePlaceholder = document.getElementById('sourcePlaceholder');
+            if (sourceImg && sourcePlaceholder) {
+                sourceImg.src = img.src;
+                sourceImg.style.display = 'block';
+                sourcePlaceholder.style.display = 'none';
+            }
 
             this.updateProcessButtonState();
             this.clearError();
@@ -94,9 +122,12 @@ class UIController {
 
             // 显示预览
             const targetImg = document.getElementById('targetImage');
-            targetImg.src = img.src;
-            targetImg.style.display = 'block';
-            document.getElementById('targetPlaceholder').style.display = 'none';
+            const targetPlaceholder = document.getElementById('targetPlaceholder');
+            if (targetImg && targetPlaceholder) {
+                targetImg.src = img.src;
+                targetImg.style.display = 'block';
+                targetPlaceholder.style.display = 'none';
+            }
 
             this.updateProcessButtonState();
             this.clearError();
@@ -107,6 +138,8 @@ class UIController {
 
     updateProcessButtonState() {
         const processBtn = document.getElementById('processBtn');
+        if (!processBtn) return;
+
         const hasBothImages = imageProcessor.sourceImage && imageProcessor.targetImage;
         processBtn.disabled = !hasBothImages || this.isProcessing;
     }
@@ -162,17 +195,24 @@ class UIController {
 
     displayResult(canvas) {
         const resultCanvas = document.getElementById('resultCanvas');
+        const resultSection = document.getElementById('resultSection');
+        
+        if (!resultCanvas || !resultSection) return;
+
         const ctx = resultCanvas.getContext('2d');
         resultCanvas.width = canvas.width;
         resultCanvas.height = canvas.height;
         ctx.drawImage(canvas, 0, 0);
 
-        document.getElementById('resultSection').style.display = 'block';
+        resultSection.style.display = 'block';
     }
 
     async downloadResult() {
         const resultCanvas = document.getElementById('resultCanvas');
-        if (!resultCanvas) return;
+        if (!resultCanvas || resultCanvas.width === 0) {
+            this.showError('没有可下载的结果');
+            return;
+        }
 
         try {
             const blob = await imageProcessor.canvasToBlob(resultCanvas);
@@ -191,19 +231,30 @@ class UIController {
 
     reset() {
         // 清空图像
-        document.getElementById('sourceImage').style.display = 'none';
-        document.getElementById('targetImage').style.display = 'none';
-        document.getElementById('sourcePlaceholder').style.display = 'flex';
-        document.getElementById('targetPlaceholder').style.display = 'flex';
-        document.getElementById('sourceImage').src = '';
-        document.getElementById('targetImage').src = '';
-        document.getElementById('sourceInput').value = '';
-        document.getElementById('targetInput').value = '';
+        const sourceImage = document.getElementById('sourceImage');
+        const targetImage = document.getElementById('targetImage');
+        const sourcePlaceholder = document.getElementById('sourcePlaceholder');
+        const targetPlaceholder = document.getElementById('targetPlaceholder');
+        const sourceInput = document.getElementById('sourceInput');
+        const targetInput = document.getElementById('targetInput');
+        const resultSection = document.getElementById('resultSection');
+        const resultCanvas = document.getElementById('resultCanvas');
+
+        if (sourceImage) sourceImage.style.display = 'none';
+        if (targetImage) targetImage.style.display = 'none';
+        if (sourcePlaceholder) sourcePlaceholder.style.display = 'flex';
+        if (targetPlaceholder) targetPlaceholder.style.display = 'flex';
+        if (sourceImage) sourceImage.src = '';
+        if (targetImage) targetImage.src = '';
+        if (sourceInput) sourceInput.value = '';
+        if (targetInput) targetInput.value = '';
 
         // 清空结果
-        document.getElementById('resultSection').style.display = 'none';
-        document.getElementById('resultCanvas').width = 0;
-        document.getElementById('resultCanvas').height = 0;
+        if (resultSection) resultSection.style.display = 'none';
+        if (resultCanvas) {
+            resultCanvas.width = 0;
+            resultCanvas.height = 0;
+        }
 
         // 清空缓存
         imageProcessor.clear();
@@ -219,25 +270,31 @@ class UIController {
     }
 
     showLoading() {
-        document.getElementById('loadingIndicator').style.display = 'block';
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) loadingIndicator.style.display = 'block';
     }
 
     hideLoading() {
-        document.getElementById('loadingIndicator').style.display = 'none';
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
     }
 
     updateProcessingStep(step) {
-        document.getElementById('processingStep').textContent = step;
+        const processingStep = document.getElementById('processingStep');
+        if (processingStep) processingStep.textContent = step;
     }
 
     showError(message) {
         const errorDiv = document.getElementById('errorMessage');
-        errorDiv.textContent = message;
-        errorDiv.style.display = 'block';
+        if (errorDiv) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
     }
 
     clearError() {
-        document.getElementById('errorMessage').style.display = 'none';
+        const errorDiv = document.getElementById('errorMessage');
+        if (errorDiv) errorDiv.style.display = 'none';
     }
 }
 
